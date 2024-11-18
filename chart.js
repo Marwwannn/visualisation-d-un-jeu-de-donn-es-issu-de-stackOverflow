@@ -1,199 +1,154 @@
-/**$(document).ready(function() {
-    // Utiliser getJSON pour charger le fichier JO.json
-    $.getJSON('JO.json')
-        .then(function(data) {
-            // Parcourir et afficher chaque année
-            let outputDiv = $('#output');
-            $.each(data, function(index, e) {
-                const year = e["Year"];
-                const city = e["City"];
-                const athlete = e["Athlete"];
+let chartInstance = null; // Variable pour stocker l'instance du graphique
 
-                outputDiv.append(`<p>Year: ${year}, City: ${city}, Athlete: ${athlete}</p>`);
-            });
-        })
-        .fail(function() {
-            console.error('Erreur lors du chargement du fichier JSON.');
-        });
-});
-**/
-lien = "JO.json"
+async function fetchData(continent) {
+    try {
+        const urls = {
+            europe: "survey_results_WE.json",
+            america: "survey_results_NA.json"
+        };
 
-function recupDonnee(lien) {
-    return $.getJSON(lien)
-        .fail(function() {
-            console.error('Erreur lors du chargement du fichier JSON.');
-        });
+        const url = urls[continent];
+        if (!url) throw new Error(`Aucune URL trouvée pour le continent: ${continent}`);
+
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Erreur lors du chargement des données depuis ${url}`);
+        
+        return await response.json();
+    } catch (error) {
+        console.error(error.message);
+        alert('Erreur lors du chargement des données. Vérifiez les fichiers JSON.');
+        return null;
+    }
 }
 
-function getCountryData(data, country) {
-    countryData = data.filter(function(e) {
-        return e.Country === country;
-    });
-    return countryData;
-}
+function createOrUpdateChart(labels, data, chartType = 'line', title = 'Graphique') {
+    const ctx = document.getElementById('myChart').getContext('2d');
 
-function getYears(data) { // On utilise Set pck les doublons sont directement traité
-    const yearsSet = new Set();
-    data.forEach(function(e) {
-        yearsSet.add(e.Year); 
-    });
-    return Array.from(yearsSet);
-}
-
-function aggregateYears(data, years) {
-    const medailleDelivre = new Map();  
-    
-
-    years.forEach(function(year) {
-        medailleDelivre.set(year, 0);
-    });
-    data.forEach(function(e) {
-        const year = e.Year;
-        if (years.includes(year)) {
-            medailleDelivre.set(year, medailleDelivre.get(year) + 1);
-        }
-    });
-
-    return medailleDelivre;  
-}
-
-
-function treatData(data, country){
-    tableauAnnee = []
-    tableauNombre = []
-
-    countryData = getCountryData(data, country);
-
-    uniqueYears = getYears(countryData).sort((a, b) => a - b);
-
-    uniqueYears.forEach(function(e) {
-        tableauAnnee.push(e)
-    })
-
-    const medailleMap = aggregateYears(countryData, tableauAnnee);
-    medailleMap.forEach(function(nbrMed) {
-        tableauNombre.push(nbrMed);
-    });
-
-    return {
-        annees: tableauAnnee,
-        medailles: tableauNombre
-    };
-}
-
-function loadChart(medals, years) {
-    const ctx = document.getElementById('lineChart').getContext('2d');
-    const lineChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: years,
-            datasets: [{
-                label: 'Médailles remportées',
-                data: medals,
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                borderColor: 'rgba(75, 192, 192, 1)',
-                borderWidth: 2,
-                pointRadius: 5,
-                pointBackgroundColor: 'rgba(75, 192, 192, 1)'
-            }]
-        },
-        options: {
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Nombre de médailles'
+    // Si un graphique existe déjà, on met à jour ses données
+    if (chartInstance) {
+        chartInstance.data.labels = labels;
+        chartInstance.data.datasets[0].data = data;
+        chartInstance.data.datasets[0].label = title;
+        chartInstance.update();
+    } else {
+        // Sinon, on crée un nouveau graphique
+        chartInstance = new Chart(ctx, {
+            type: chartType,
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: title,
+                    data: data,
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,  // Commencer l'échelle à 0
+                        min: 0,  // Définir une valeur minimale si nécessaire
+                        title: {
+                            display: true,
+                            text: 'Valeurs'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Catégories'
+                        }
                     }
                 },
-                x: {
-                    title: {
+                plugins: {
+                    legend: {
                         display: true,
-                        text: 'Années'
+                        position: 'top'
                     }
                 }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
             }
-        }
-    });
-    return lineChart; 
-}
-
-
-$(document).ready(function() {
-    const country = "France";
-
-    recupDonnee('JO.json').then(function(data) {
-        const treat = treatData(data, country);
-        const annees = treat.annees;
-        const med = treat.medailles;
-        const chart = loadChart(med, annees);
-        createCountriesDropDown(data,chart); 
-    });
-});
-
-function getCountries(data) {
-    const pays = new Set();
-    data.forEach(function(e) {
-        pays.add(e.Country); 
-    });
-    return Array.from(pays).sort();
-}
-
-function updateCountry(chart, nomPays, dataJs){
-
-    const dataA = treatData(dataJs,nomPays)
-
-    chart.data.datasets[0].data = dataA.medailles;  
-    chart.data.labels = dataA.annees; 
-    chart.update()
-}   
-
-    function createCountriesDropDown(data, chart){
-        const select = document.createElement("select");
-
-        select.id = "mon zgeg"
-        
-        const pays = getCountries(data);
-
-        console.log('Unique countries:', pays);
-
-        pays.forEach(function(payss) {
-            let option = document.createElement('option');
-            option.value = payss;
-            option.text = payss;
-            // On ajoute l'option au dropDown
-            select.appendChild(option);
-        })
-
-        document.getElementById("dropdownContainer").appendChild(select);
-
-        select.addEventListener('change', function() {
-            const selectedCountry = this.value;
-            updateCountry(chart, selectedCountry, data);
         });
     }
+}
 
-function filter(critere,data,valeur){
-    dataFiltre = data.filter(function(e) {
-        return e[critere] === valeur;
+// Fonction pour regrouper les données et calculer la moyenne des revenus
+function groupAndAverageData(experience, income) {
+    const dataMap = {};
+
+    // Définir un seuil raisonnable pour les revenus, ajustable selon tes données
+    const incomeThreshold = 500000;  // Limite pour exclure les revenus trop élevés
+
+    experience.forEach((exp, index) => {
+        const currentIncome = income[index];
+
+        // Vérifier si les valeurs sont valides
+        if (isNaN(exp) || isNaN(currentIncome) || currentIncome < 0 || currentIncome > incomeThreshold) {
+            console.warn(`Valeur ignorée à l'index ${index} : expérience ${exp}, revenu ${currentIncome}`);
+            return;  // Ignorer cette valeur si elle est invalide
+        }
+
+        if (!dataMap[exp]) {
+            dataMap[exp] = { sum: 0, count: 0 };
+        }
+        dataMap[exp].sum += currentIncome;  // Ajouter le revenu pour cette expérience
+        dataMap[exp].count += 1;  // Compter le nombre d'entrées pour cette expérience
     });
-    return dataFiltre;
+
+    // Calculer les moyennes des revenus pour chaque expérience unique
+    const uniqueExperience = Object.keys(dataMap).map(Number);  // Liste des expériences uniques
+    const averageIncome = uniqueExperience.map(exp => {
+        const average = dataMap[exp].sum / dataMap[exp].count;
+        return average;  // Retourner la moyenne des revenus
+    });
+
+    return { uniqueExperience, averageIncome };
 }
 
-function getValues(data, critere){
-    const valeurCritere = new Set();
 
-    data.forEach(function(e){
-        valeurCritere.add(e[critere])
-    })
+document.getElementById('continentSelector').addEventListener('change', async (event) => {
+    const selectedContinent = event.target.value;
+    const data = await fetchData(selectedContinent);
 
-    return Array.from(valeurCritere).sort()
-}
+    if (data) {
+        const experience = data.map(item => item.experience_years);
+        const averageIncome = data.map(item => item.average_income);
 
+        createOrUpdateChart(experience, averageIncome, 'bar', `Revenus moyens (${selectedContinent})`);
+    }
+});
+
+// Chargement initial pour l'Europe
+fetchData('europe').then(data => {
+    if (data) {
+        console.log('Données récupérées:', data);  // Vérifie les données
+
+        // Créer des tableaux d'expérience et de revenus valides
+        const filteredData = data.filter(item => {
+            const experience = parseInt(item.WorkExp);
+            const averageIncome = parseInt(item.CompTotal);
+            return !isNaN(experience) && !isNaN(averageIncome) && experience >= 0 && averageIncome >= 0;  // Filtrer si les deux sont valides
+        });
+
+        // Extraire l'expérience et les revenus moyens après filtration
+        const experience = filteredData.map(item => parseInt(item.WorkExp));
+        const averageIncome = filteredData.map(item => parseInt(item.CompTotal));
+
+        console.log('Expérience:', experience);  // Affiche les données d'expérience
+        console.log('Revenus moyens:', averageIncome);  // Affiche les revenus moyens
+
+        // Calculer la moyenne des revenus pour chaque expérience unique
+        const { uniqueExperience, averageIncome: averagedIncome } = groupAndAverageData(experience, averageIncome);
+
+        console.log('Expériences uniques:', uniqueExperience);
+        console.log('Revenus moyens (moyenne):', averagedIncome);
+
+        // Si les données sont valides, on crée ou met à jour le graphique
+        if (uniqueExperience.length > 0 && averagedIncome.length > 0) {
+            createOrUpdateChart(uniqueExperience, averagedIncome, 'line', 'Revenus moyens (Europe)');
+        } else {
+            console.error('Les données sont vides ou mal formatées.');
+        }
+    }
+});
